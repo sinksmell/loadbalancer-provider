@@ -1,5 +1,5 @@
-FROM cargo.caicloudprivatetest.com/caicloud/lvs:alpine3.6
+FROM cargo.caicloud.xyz/release/lvs:alpine3.6
 
-COPY bin/linux_amd64/azure /root/azure
+COPY bin/azure /root/azure
 
 ENTRYPOINT ["/root/azure"]

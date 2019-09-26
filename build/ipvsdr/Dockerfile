@@ -1,6 +1,6 @@
-FROM cargo.caicloudprivatetest.com/caicloud/lvs:alpine3.7
+FROM cargo.caicloud.xyz/release/lvs:alpine3.7
 
-COPY bin/linux_amd64/ipvsdr /root/ipvsdr
+COPY bin/ipvsdr /root/ipvsdr
 COPY build/ipvsdr/keepalived.tmpl /root/keepalived.tmpl
 COPY build/ipvsdr/keepalived.conf /etc/keepalived/keepalived.conf
 
