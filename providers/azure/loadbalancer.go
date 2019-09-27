@@ -67,7 +67,7 @@ func getProbesBrief(probes *[]network.Probe) *[]network.Probe {
 func getAzureLoadBalancerFrontendIPConfigByConfig(properties lbapi.AzureIPAddressProperties) *[]network.FrontendIPConfiguration {
 	frontendIPConfigurations := make([]network.FrontendIPConfiguration, 1)
 	frontendIPConfiguration := network.FrontendIPConfiguration{
-		Name: to.StringPtr(azureLoadBalancerFrontendName),
+		Name:                                    to.StringPtr(azureLoadBalancerFrontendName),
 		FrontendIPConfigurationPropertiesFormat: &network.FrontendIPConfigurationPropertiesFormat{},
 	}
 	// make up front end private address config
@@ -341,10 +341,7 @@ func ensureSyncRulesToSecurityGroups(c *client.Client, sgIDs securityGroupIDSet,
 		if sg.SecurityRules != nil && len(*sg.SecurityRules) != 0 {
 			for i := range *sg.SecurityRules {
 				rule := (*sg.SecurityRules)[i]
-				modify, remain, err := ensureSyncWithDefaultSetting(&rule, tcp, udp)
-				if err != nil {
-					return err
-				}
+				modify, remain := ensureSyncWithDefaultSetting(&rule, tcp, udp)
 				if remain {
 					newRules = append(newRules, rule)
 					sgUsedPriorityMap[to.Int32(rule.Priority)] = struct{}{}
@@ -415,7 +412,7 @@ func getValidPriority(used, del map[int32]struct{}) (int32, error) {
 
 // ensureSyncWithDefaultSetting reset the rules which automatically generate by cps if has differents
 // between them and the default rules
-func ensureSyncWithDefaultSetting(rule *network.SecurityRule, tcp, udp map[string]string) (bool, bool, error) {
+func ensureSyncWithDefaultSetting(rule *network.SecurityRule, tcp, udp map[string]string) (bool, bool) {
 	var ruleMap map[string]string
 	var rulePrefix string
 	// the port range is not the unique value during the security group rules
@@ -429,22 +426,23 @@ func ensureSyncWithDefaultSetting(rule *network.SecurityRule, tcp, udp map[strin
 		rulePrefix = securityGroupUDPPrefix
 	} else {
 		// remain others rules
-		return false, true, nil
+		return false, true
 	}
 
 	_, ok := ruleMap[to.String(rule.DestinationPortRange)]
 	// if the rule don't exist in the rule map return directly
 	if !ok {
-		return true, false, nil
+		return true, false
 	}
 	change := ensureSettingDefaultRules(rule, ruleMap, rulePrefix)
 	// delete the exist port range, the rest of port will be added to sg rules
 	delete(ruleMap, to.String(rule.DestinationPortRange))
-	return change, true, nil
+	return change, true
 }
 
 // ensureSettingDefaultRules make sure the setting is default
 func ensureSettingDefaultRules(rule *network.SecurityRule, tcp map[string]string, prefix string) bool {
+	_ = tcp
 	defaultRule := getDefaultSecurityGroupRule(prefix, to.String(rule.DestinationPortRange), rule.Priority)
 	ruleBrief := getSecurityGroupRuleBrief(rule)
 	if reflect.DeepEqual(defaultRule, ruleBrief) {
@@ -477,9 +475,9 @@ func getSecurityGroupRuleBrief(rule *network.SecurityRule) *network.SecurityRule
 			DestinationPortRange:     rule.DestinationPortRange,
 			SourceAddressPrefix:      rule.SourceAddressPrefix,
 			DestinationAddressPrefix: rule.DestinationAddressPrefix,
-			Access:    rule.Access,
-			Priority:  rule.Priority,
-			Direction: rule.Direction,
+			Access:                   rule.Access,
+			Priority:                 rule.Priority,
+			Direction:                rule.Direction,
 		},
 	}
 }
@@ -498,9 +496,9 @@ func getDefaultSecurityGroupRule(prefix, port string, priority *int32) *network.
 			DestinationPortRange:     to.StringPtr(port),
 			SourceAddressPrefix:      to.StringPtr("*"),
 			DestinationAddressPrefix: to.StringPtr("*"),
-			Access:    network.SecurityRuleAccessAllow,
-			Priority:  priority,
-			Direction: network.SecurityRuleDirectionInbound,
+			Access:                   network.SecurityRuleAccessAllow,
+			Priority:                 priority,
+			Direction:                network.SecurityRuleDirectionInbound,
 		},
 	}
 }

@@ -88,7 +88,7 @@ func Run(opts *Options) error {
 }
 
 func main() {
-	flag.CommandLine.Parse([]string{})
+	_ = flag.CommandLine.Parse([]string{})
 
 	app := cli.NewApp()
 	app.Name = "azure provider"
@@ -108,7 +108,7 @@ func main() {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 
-	app.Run(os.Args)
+	_ = app.Run(os.Args)
 }
 
 func handleSigterm(p *core.GenericProvider) {

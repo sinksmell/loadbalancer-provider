@@ -32,14 +32,14 @@ const (
 	azurePublicIPAddresses = "publicIPAddresses"
 	azureIPConfigurations  = "/ipConfigurations"
 
-	annotationCaicloudAzure        = "caicloud-azure"
-	annotationCaicloudAzureAKS     = "caicloud-azure-aks"
+	annotationCaicloudAzure = "caicloud-azure"
+	//	annotationCaicloudAzureAKS     = "caicloud-azure-aks"
 	annotationMachineCloudProvider = "machine.resource.caicloud.io/cloud-provider"
 	annotationVirtualMachineID     = "machine.resource.caicloud.io/virtual-machine-id"
 	labelCaicloudAKSResource       = "kubernetes.azure.com/cluster"
 
 	// the min and max priority get from azure docs
-	minSecurityGroupPriority             int32 = 100
+	//	minSecurityGroupPriority             int32 = 100
 	maxSecurityGroupPriority             int32 = 4096
 	defaultSecurityGroupPriorityStart    int32 = 1000
 	defaultSecurityGroupPriorityIncrease int32 = 10
@@ -105,6 +105,7 @@ func getMachineInfoFromNode(c *client.Client, nodeName string, storeLister *core
 }
 
 func getMachineInfoInAKSCluster(c *client.Client, node *v1.Node) (*machineInfo, error) {
+	_ = c
 	resourceGroup, ok := node.Labels[labelCaicloudAKSResource]
 	if !ok {
 		return nil, fmt.Errorf("get %s label failed", labelCaicloudAKSResource)
@@ -297,6 +298,7 @@ func remainConstantRules(oldRules []network.LoadBalancingRule, tcpMap, udpMap ma
 
 //new rule
 func newRuleWithConfig(azlb *network.LoadBalancer, port, service string, protocol network.TransportProtocol) (*network.LoadBalancingRule, error) {
+	_ = service
 	// check
 	if azlb.Probes == nil || len(*azlb.Probes) == 0 {
 		return nil, fmt.Errorf("azure lb probes is nil")

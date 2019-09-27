@@ -70,8 +70,7 @@ func (k *keepalived) UpdateConfig(vss []virtualServer, neighbors []ipmac, priori
 	if err != nil {
 		return err
 	}
-	defer w.Close()
-
+	defer func() { _ = w.Close() }()
 	log.Infof("Updating keealived config")
 	// save vips for release when shutting down
 	k.vips = getVIPs(vss)
@@ -162,7 +161,7 @@ func (k *keepalived) Reload() error {
 // Stop stop keepalived process
 func (k *keepalived) Stop() {
 	for _, vip := range k.vips {
-		k.removeVIP(vip)
+		_ = k.removeVIP(vip)
 	}
 
 	log.Info("flush iptables chain", log.Fields{"table": iptables.TableFilter, "chain": iptablesChain})

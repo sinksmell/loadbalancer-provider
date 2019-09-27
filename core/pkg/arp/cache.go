@@ -66,10 +66,10 @@ func Resolve(iface, ip string) (net.HardwareAddr, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// add timeout to avoid infinite waiting
-	client.SetDeadline(time.Now().Add(2 * time.Second))
+	_ = client.SetDeadline(time.Now().Add(2 * time.Second))
 
 	return client.Resolve(ipAddr)
 }

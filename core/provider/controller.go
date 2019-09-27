@@ -134,7 +134,7 @@ func (p *GenericProvider) Stop() error {
 		close(p.stopCh)
 		// stop backend
 		log.Info("stop backend")
-		p.cfg.Backend.Stop()
+		_ = p.cfg.Backend.Stop()
 		// stop syncing
 		log.Info("shutting down controller queue")
 		p.queue.ShutDown()

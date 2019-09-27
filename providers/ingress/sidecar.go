@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	tableRaw      = "raw"
-	iptablesChain = "INGRESS-CONTROLLER"
+//	tableRaw      = "raw"
+//	iptablesChain = "INGRESS-CONTROLLER"
 )
 
 var (
@@ -66,24 +66,24 @@ var (
 		"net.core.netdev_max_backlog": "262144",
 	}
 )
-var _ core.Provider = &IngressSidecar{}
+var _ core.Provider = &Sidecar{}
 
-// IngressSidecar ...
-type IngressSidecar struct {
+// Sidecar ...
+type Sidecar struct {
 	storeLister   core.StoreLister
 	ipt           iptables.Interface
 	sysctlDefault map[string]string
-	tcpPorts      []string
-	udpPorts      []string
+	// tcpPorts      []string
+	// udpPorts      []string
 }
 
 // NewIngressSidecar creates a new ingress sidecar
-func NewIngressSidecar(lb *lbapi.LoadBalancer) (*IngressSidecar, error) {
+func NewIngressSidecar(lb *lbapi.LoadBalancer) (*Sidecar, error) {
 	execer := k8sexec.New()
 	dbus := utildbus.New()
 	iptInterface := iptables.New(execer, dbus, iptables.ProtocolIpv4)
 
-	sidecar := &IngressSidecar{
+	sidecar := &Sidecar{
 		sysctlDefault: make(map[string]string),
 		ipt:           iptInterface,
 	}
@@ -92,26 +92,25 @@ func NewIngressSidecar(lb *lbapi.LoadBalancer) (*IngressSidecar, error) {
 }
 
 // OnUpdate ...
-func (p *IngressSidecar) OnUpdate(lb *lbapi.LoadBalancer) error {
+func (p *Sidecar) OnUpdate(lb *lbapi.LoadBalancer) error {
 
 	return nil
 }
 
 // Start ...
-func (p *IngressSidecar) Start() {
+func (p *Sidecar) Start() {
 	log.Info("Startting ingress sidecar provider")
 
-	p.changeSysctl()
-	return
+	_ = p.changeSysctl()
 }
 
 // WaitForStart ...
-func (p *IngressSidecar) WaitForStart() bool {
+func (p *Sidecar) WaitForStart() bool {
 	return true
 }
 
 // Stop ...
-func (p *IngressSidecar) Stop() error {
+func (p *Sidecar) Stop() error {
 	log.Info("Shutting down ingress sidecar provider")
 
 	err := p.resetSysctl()
@@ -123,7 +122,7 @@ func (p *IngressSidecar) Stop() error {
 }
 
 // Info ...
-func (p *IngressSidecar) Info() core.Info {
+func (p *Sidecar) Info() core.Info {
 	info := version.Get()
 	return core.Info{
 		Name:      "ingress-sidecar",
@@ -134,13 +133,13 @@ func (p *IngressSidecar) Info() core.Info {
 }
 
 // SetListers sets the configured store listers in the generic ingress controller
-func (p *IngressSidecar) SetListers(lister core.StoreLister) {
+func (p *Sidecar) SetListers(lister core.StoreLister) {
 	p.storeLister = lister
 }
 
 // changeSysctl changes the required network setting in /proc to get
 // keepalived working in the local system.
-func (p *IngressSidecar) changeSysctl() error {
+func (p *Sidecar) changeSysctl() error {
 	var err error
 	p.sysctlDefault, err = sysctl.BulkModify(sysctlAdjustments)
 	if err != nil {
@@ -151,7 +150,7 @@ func (p *IngressSidecar) changeSysctl() error {
 }
 
 // resetSysctl resets the network setting
-func (p *IngressSidecar) resetSysctl() error {
+func (p *Sidecar) resetSysctl() error {
 	log.Info("reset sysctl to original value", log.Fields{"defaults": p.sysctlDefault})
 	_, err := sysctl.BulkModify(p.sysctlDefault)
 	return err

@@ -42,7 +42,7 @@ const (
 	tableMangle = "mangle"
 )
 
-var _ core.Provider = &IpvsdrProvider{}
+var _ core.Provider = &Provider{}
 
 var (
 	// sysctl changes required by keepalived
@@ -62,8 +62,8 @@ var (
 	}
 )
 
-// IpvsdrProvider ...
-type IpvsdrProvider struct {
+// Provider ...
+type Provider struct {
 	nodeIP            net.IP
 	nodeInfo          *corenet.Interface
 	reloadRateLimiter flowcontrol.RateLimiter
@@ -79,7 +79,7 @@ type IpvsdrProvider struct {
 }
 
 // NewIpvsdrProvider creates a new ipvs-dr LoadBalancer Provider.
-func NewIpvsdrProvider(nodeIP net.IP, lb *lbapi.LoadBalancer, unicast bool, labels, annotations []string) (*IpvsdrProvider, error) {
+func NewIpvsdrProvider(nodeIP net.IP, lb *lbapi.LoadBalancer, unicast bool, labels, annotations []string) (*Provider, error) {
 	nodeInfo, err := corenet.InterfaceByIP(nodeIP.String())
 	if err != nil {
 		log.Error("get node info err", log.Fields{"err": err})
@@ -90,12 +90,12 @@ func NewIpvsdrProvider(nodeIP net.IP, lb *lbapi.LoadBalancer, unicast bool, labe
 	dbus := utildbus.New()
 	iptInterface := iptables.New(execer, dbus, iptables.ProtocolIpv4)
 
-	ipvs := &IpvsdrProvider{
+	ipvs := &Provider{
 		nodeIP:            nodeIP,
 		nodeInfo:          nodeInfo,
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(10.0, 10),
 		vip:               lb.Spec.Providers.Ipvsdr.VIP,
-		sysctlDefault:     make(map[string]string, 0),
+		sysctlDefault:     make(map[string]string),
 		ipt:               iptInterface,
 		nodeIPLabels:      labels,
 		nodeIPAnnotations: annotations,
@@ -123,7 +123,7 @@ func NewIpvsdrProvider(nodeIP net.IP, lb *lbapi.LoadBalancer, unicast bool, labe
 }
 
 // OnUpdate ...
-func (p *IpvsdrProvider) OnUpdate(lb *lbapi.LoadBalancer) error {
+func (p *Provider) OnUpdate(lb *lbapi.LoadBalancer) error {
 	p.reloadRateLimiter.Accept()
 
 	if err := lbapi.ValidateLoadBalancer(lb); err != nil {
@@ -217,31 +217,27 @@ func (p *IpvsdrProvider) OnUpdate(lb *lbapi.LoadBalancer) error {
 }
 
 // Start ...
-func (p *IpvsdrProvider) Start() {
+func (p *Provider) Start() {
 	log.Info("Startting ipvs dr provider")
 
-	p.changeSysctl()
-	p.setLoopbackVIP()
+	_ = p.changeSysctl()
+	_ = p.setLoopbackVIP()
 	p.ensureChain()
 	p.keepalived.Start()
 	p.ipvsCacheChecker.start()
-	return
 }
 
 // WaitForStart waits for ipvsdr fully run
-func (p *IpvsdrProvider) WaitForStart() bool {
+func (p *Provider) WaitForStart() bool {
 	err := wait.Poll(time.Second, 60*time.Second, func() (bool, error) {
 		return p.keepalived.isRunning(), nil
 	})
 
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // Stop ...
-func (p *IpvsdrProvider) Stop() error {
+func (p *Provider) Stop() error {
 	log.Info("Shutting down ipvs dr provider")
 
 	err := p.resetSysctl()
@@ -263,7 +259,7 @@ func (p *IpvsdrProvider) Stop() error {
 }
 
 // Info ...
-func (p *IpvsdrProvider) Info() core.Info {
+func (p *Provider) Info() core.Info {
 	info := version.Get()
 	return core.Info{
 		Name:      "ipvsdr",
@@ -274,11 +270,11 @@ func (p *IpvsdrProvider) Info() core.Info {
 }
 
 // SetListers sets the configured store listers in the generic ingress controller
-func (p *IpvsdrProvider) SetListers(lister core.StoreLister) {
+func (p *Provider) SetListers(lister core.StoreLister) {
 	p.storeLister = lister
 }
 
-func (p *IpvsdrProvider) getNodesIP(names []string) []string {
+func (p *Provider) getNodesIP(names []string) []string {
 	ips := make([]string, 0)
 	if names == nil {
 		return ips
@@ -300,7 +296,7 @@ func (p *IpvsdrProvider) getNodesIP(names []string) []string {
 	return ips
 }
 
-func (p *IpvsdrProvider) ensureChain() {
+func (p *Provider) ensureChain() {
 	// create chain
 	ae, err := p.ipt.EnsureChain(tableMangle, iptables.Chain(iptablesChain))
 	if err != nil {
@@ -311,40 +307,40 @@ func (p *IpvsdrProvider) ensureChain() {
 	}
 
 	// add rule to let all traffic jump to our chain
-	p.ipt.EnsureRule(iptables.Append, tableMangle, iptables.ChainPrerouting, "-j", iptablesChain)
+	_, _ = p.ipt.EnsureRule(iptables.Append, tableMangle, iptables.ChainPrerouting, "-j", iptablesChain)
 }
 
-func (p *IpvsdrProvider) flushChain() {
+func (p *Provider) flushChain() {
 	log.Info("flush iptables rules", log.Fields{"table": tableMangle, "chain": iptablesChain})
-	p.ipt.FlushChain(tableMangle, iptables.Chain(iptablesChain))
+	_ = p.ipt.FlushChain(tableMangle, iptables.Chain(iptablesChain))
 }
 
-func (p *IpvsdrProvider) deleteChain() {
+func (p *Provider) deleteChain() {
 	// flush chain
 	p.flushChain()
 	// delete jump rule
-	p.ipt.DeleteRule(tableMangle, iptables.ChainPrerouting, "-j", iptablesChain)
+	_ = p.ipt.DeleteRule(tableMangle, iptables.ChainPrerouting, "-j", iptablesChain)
 	// delete chain
-	p.ipt.DeleteChain(tableMangle, iptablesChain)
+	_ = p.ipt.DeleteChain(tableMangle, iptablesChain)
 }
 
 // changeSysctl changes the required network setting in /proc to get
 // keepalived working in the local system.
-func (p *IpvsdrProvider) changeSysctl() error {
+func (p *Provider) changeSysctl() error {
 	var err error
 	p.sysctlDefault, err = sysctl.BulkModify(sysctlAdjustments)
 	return err
 }
 
 // resetSysctl resets the network setting
-func (p *IpvsdrProvider) resetSysctl() error {
+func (p *Provider) resetSysctl() error {
 	log.Info("reset sysctl to original value", log.Fields{"defaults": p.sysctlDefault})
 	_, err := sysctl.BulkModify(p.sysctlDefault)
 	return err
 }
 
 // setLoopbackVIP sets vip to dev lo
-func (p *IpvsdrProvider) setLoopbackVIP() error {
+func (p *Provider) setLoopbackVIP() error {
 
 	if p.vip == "" {
 		return nil
@@ -363,7 +359,7 @@ func (p *IpvsdrProvider) setLoopbackVIP() error {
 }
 
 // removeLoopbackVIP removes vip from dev lo
-func (p *IpvsdrProvider) removeLoopbackVIP() error {
+func (p *Provider) removeLoopbackVIP() error {
 	log.Info("remove vip from dev lo", log.Fields{"vip": p.vip})
 
 	if p.vip == "" {
@@ -382,7 +378,7 @@ func (p *IpvsdrProvider) removeLoopbackVIP() error {
 	return nil
 }
 
-func (p *IpvsdrProvider) resolveNeighbors(neighbors []string) []ipmac {
+func (p *Provider) resolveNeighbors(neighbors []string) []ipmac {
 	resolvedNeighbors := make([]ipmac, 0)
 
 	for _, neighbor := range neighbors {
@@ -399,15 +395,15 @@ func (p *IpvsdrProvider) resolveNeighbors(neighbors []string) []ipmac {
 	return resolvedNeighbors
 }
 
-func (p *IpvsdrProvider) appendIptablesMark(protocol string, mark int, mac string, ports []string) (bool, error) {
+func (p *Provider) appendIptablesMark(protocol string, mark int, mac string, ports []string) (bool, error) {
 	return p.setIptablesMark(iptables.Append, protocol, mark, mac, ports)
 }
 
-func (p *IpvsdrProvider) prependIptablesMark(protocol string, mark int, mac string, ports []string) (bool, error) {
+func (p *Provider) prependIptablesMark(protocol string, mark int, mac string, ports []string) (bool, error) {
 	return p.setIptablesMark(iptables.Prepend, protocol, mark, mac, ports)
 }
 
-func (p *IpvsdrProvider) setIptablesMark(position iptables.RulePosition, protocol string, mark int, mac string, ports []string) (bool, error) {
+func (p *Provider) setIptablesMark(position iptables.RulePosition, protocol string, mark int, mac string, ports []string) (bool, error) {
 	if len(ports) == 0 {
 		return p.ipt.EnsureRule(position, tableMangle, iptablesChain, p.buildIptablesArgs(protocol, mark, mac, "")...)
 	}
@@ -422,7 +418,7 @@ func (p *IpvsdrProvider) setIptablesMark(position iptables.RulePosition, protoco
 	return true, nil
 }
 
-func (p *IpvsdrProvider) buildIptablesArgs(protocol string, mark int, mac string, port string) []string {
+func (p *Provider) buildIptablesArgs(protocol string, mark int, mac string, port string) []string {
 	args := make([]string, 0)
 	args = append(args, "-i", p.nodeInfo.Name, "-d", p.vip, "-p", protocol)
 	if port != "" {
@@ -435,7 +431,7 @@ func (p *IpvsdrProvider) buildIptablesArgs(protocol string, mark int, mac string
 	return args
 }
 
-func (p *IpvsdrProvider) ensureIptablesMark(neighbors []ipmac, tcpPorts, udpPorts []string) {
+func (p *Provider) ensureIptablesMark(neighbors []ipmac, tcpPorts, udpPorts []string) {
 	log.Info("ensure iptables rules")
 
 	// flush all rules

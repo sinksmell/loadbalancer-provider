@@ -21,14 +21,13 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"regexp"
 )
 
 var (
-	invalidIfaces = []string{"lo", "docker0", "flannel.1", "cbr0"}
-	nsSvcLbRegex  = regexp.MustCompile(`(.*)/(.*):(.*)|(.*)/(.*)`)
-	vethRegex     = regexp.MustCompile(`^veth.*`)
-	lvsRegex      = regexp.MustCompile(`NAT`)
+//	invalidIfaces = []string{"lo", "docker0", "flannel.1", "cbr0"}
+//	nsSvcLbRegex  = regexp.MustCompile(`(.*)/(.*):(.*)|(.*)/(.*)`)
+//	vethRegex     = regexp.MustCompile(`^veth.*`)
+//	lvsRegex      = regexp.MustCompile(`NAT`)
 )
 
 type stringSlice []string
@@ -75,7 +74,7 @@ func checksum(filename string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	hash := md5.New()
 	_, err = io.Copy(hash, file)

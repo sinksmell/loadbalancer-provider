@@ -31,8 +31,8 @@ const (
 	fHWType
 	fFlags
 	fHWAddr
-	fMask
 	fDevice
+	// fMask
 )
 
 const (
